@@ -1,0 +1,77 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: scheduler_user
+      POSTGRES_PASSWORD: scheduler_pass
+      POSTGRES_DB: scheduler_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7.0-alpine
+    ports:
+      - "6379:6379"
+
+  # Migrate or seed the DB if you want a separate container that runs goose migrations, etc.
+  # For brevity, omitted here.
+
+  scheduler:
+    build: .
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: scheduler_user
+      DB_PASS: scheduler_pass
+      DB_NAME: scheduler_db
+
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: ""
+      SCHEDULER_PORT: "8080"
+    ports:
+      - "8080:8080"
+    command: ["./scheduler"]
+
+  # We'll create multiple worker replicas
+  worker1:
+    build: .
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: scheduler_user
+      DB_PASS: scheduler_pass
+      DB_NAME: scheduler_db
+
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: ""
+      WORKER_ID: "worker-1"
+    command: ["./worker"]
+
+  worker2:
+    build: .
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: scheduler_user
+      DB_PASS: scheduler_pass
+      DB_NAME: scheduler_db
+
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: ""
+      WORKER_ID: "worker-2"
+    command: ["./worker"]
+
+volumes:
+  pgdata:
