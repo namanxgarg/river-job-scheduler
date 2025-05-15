@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scheduler-config
+data:
+  config.yaml: |
+    # Add your configuration here
+    key1: {{ .Values.key1 }}
+    key2: {{ .Values.key2 }} 
