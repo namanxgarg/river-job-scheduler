@@ -1,0 +1,6 @@
+apiVersion: v2
+name: job-scheduler
+description: A distributed job scheduling system
+type: application
+version: 0.1.0
+appVersion: "1.0.0" 

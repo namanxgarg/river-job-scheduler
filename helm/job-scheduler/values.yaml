@@ -1,0 +1,78 @@
+# Default values for job-scheduler
+replicaCount: 1
+
+image:
+  repository: job-scheduler
+  tag: latest
+  pullPolicy: IfNotPresent
+
+scheduler:
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+worker:
+  replicaCount: 3
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: 6-alpine
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+postgresql:
+  enabled: true
+  postgresqlUsername: postgres
+  postgresqlPassword: postgres
+  postgresqlDatabase: jobs
+  persistence:
+    enabled: true
+    size: 8Gi
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+prometheus:
+  enabled: true
+  server:
+    persistentVolume:
+      enabled: true
+      size: 8Gi
+
+grafana:
+  enabled: true
+  adminPassword: admin
+  persistence:
+    enabled: true
+    size: 8Gi
+
+service:
+  type: ClusterIP
+  port: 8080
+
+metrics:
+  serviceMonitor:
+    enabled: true 
