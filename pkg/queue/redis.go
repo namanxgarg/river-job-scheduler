@@ -54,8 +54,12 @@ func (q *RedisQueue) Enqueue(ctx context.Context, j *job.Job) error {
 		}).Err()
 	}
 
-	// Use Redis List for immediate jobs
-	return q.client.RPush(ctx, q.queueKey(j.Queue), data).Err()
+	// Use Redis Sorted Set for immediate jobs with priority
+	priorityScore := float64(j.Priority) * 1000000 // Ensure priority takes precedence
+	return q.client.ZAdd(ctx, q.queueKey(j.Queue), &redis.Z{
+		Score:  priorityScore,
+		Member: data,
+	}).Err()
 }
 
 // Dequeue retrieves a job from the queue
@@ -87,30 +91,54 @@ func (q *RedisQueue) Dequeue(ctx context.Context, queueName string) (*job.Job, e
 		return &j, nil
 	}
 
-	// If no scheduled jobs, check the regular queue
-	data, err := q.client.BLPop(ctx, 0, q.queueKey(queueName)).Result()
+	// If no scheduled jobs, check the priority queue
+	// Get the highest priority job
+	jobs, err := q.client.ZRange(ctx, q.queueKey(queueName), 0, 0).Result()
 	if err != nil {
 		return nil, err
 	}
 
-	if len(data) < 2 {
+	if len(jobs) == 0 {
 		return nil, nil
 	}
 
-	var j job.Job
-	if err := json.Unmarshal([]byte(data[1]), &j); err != nil {
+	// Remove the job from the queue
+	err = q.client.ZRem(ctx, q.queueKey(queueName), jobs[0]).Err()
+	if err != nil {
 		return nil, err
+	}
+
+	var j job.Job
+	if err := json.Unmarshal([]byte(jobs[0]), &j); err != nil {
+		return nil, err
+	}
+
+	// Check if the job is overdue
+	if j.IsOverdue() {
+		// If overdue, retry with higher priority
+		j.Priority = job.PriorityUrgent
+		return q.Retry(ctx, &j)
 	}
 
 	return &j, nil
 }
 
 // Retry adds a job back to the queue for retry
-func (q *RedisQueue) Retry(ctx context.Context, j *job.Job) error {
+func (q *RedisQueue) Retry(ctx context.Context, j *job.Job) (*job.Job, error) {
 	j.Status = job.StatusRetrying
 	j.RetryCount++
+
+	// Increase priority for retries to prevent convoy effect
+	if j.Priority < job.PriorityUrgent {
+		j.Priority++
+	}
+
 	j.ScheduledFor = time.Now().Add(j.NextRetryDelay())
-	return q.Enqueue(ctx, j)
+	err := q.Enqueue(ctx, j)
+	if err != nil {
+		return nil, err
+	}
+	return j, nil
 }
 
 // Remove removes a job from the queue

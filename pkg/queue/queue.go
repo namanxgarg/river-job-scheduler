@@ -15,7 +15,7 @@ type Queue interface {
 	Dequeue(ctx context.Context, queueName string) (*job.Job, error)
 
 	// Retry adds a job back to the queue for retry
-	Retry(ctx context.Context, j *job.Job) error
+	Retry(ctx context.Context, j *job.Job) (*job.Job, error)
 
 	// Remove removes a job from the queue
 	Remove(ctx context.Context, jobID string) error

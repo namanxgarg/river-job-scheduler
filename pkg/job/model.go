@@ -18,25 +18,37 @@ const (
 	StatusRetrying  Status = "retrying"
 )
 
+// Priority represents the job priority level
+type Priority int
+
+const (
+	PriorityLow Priority = iota
+	PriorityNormal
+	PriorityHigh
+	PriorityUrgent
+)
+
 // Job represents a task to be executed
 type Job struct {
-	ID            string          `json:"id"`
-	Name          string          `json:"name"`
-	Payload       json.RawMessage `json:"payload"`
-	Status        Status          `json:"status"`
-	CreatedAt     time.Time       `json:"created_at"`
-	UpdatedAt     time.Time       `json:"updated_at"`
-	ScheduledFor  time.Time       `json:"scheduled_for"`
-	StartedAt     *time.Time      `json:"started_at,omitempty"`
-	CompletedAt   *time.Time      `json:"completed_at,omitempty"`
-	RetryCount    int             `json:"retry_count"`
-	MaxRetries    int             `json:"max_retries"`
-	LastError     string          `json:"last_error,omitempty"`
-	Queue         string          `json:"queue"`
-	Priority      int             `json:"priority"`
-	Timeout       time.Duration   `json:"timeout"`
-	UniqueKey     string          `json:"unique_key,omitempty"`
-	WorkerID      string          `json:"worker_id,omitempty"`
+	ID             string          `json:"id"`
+	Name           string          `json:"name"`
+	Payload        json.RawMessage `json:"payload"`
+	Status         Status          `json:"status"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
+	ScheduledFor   time.Time       `json:"scheduled_for"`
+	StartedAt      *time.Time      `json:"started_at,omitempty"`
+	CompletedAt    *time.Time      `json:"completed_at,omitempty"`
+	RetryCount     int             `json:"retry_count"`
+	MaxRetries     int             `json:"max_retries"`
+	LastError      string          `json:"last_error,omitempty"`
+	Queue          string          `json:"queue"`
+	Priority       Priority        `json:"priority"`
+	Timeout        time.Duration   `json:"timeout"`
+	ProcessingTime time.Duration   `json:"processing_time,omitempty"`
+	Deadline       time.Time       `json:"deadline,omitempty"`
+	UniqueKey      string          `json:"unique_key,omitempty"`
+	WorkerID       string          `json:"worker_id,omitempty"`
 }
 
 // NewJob creates a new job with default values
@@ -51,9 +63,10 @@ func NewJob(name string, payload json.RawMessage, queue string) *Job {
 		UpdatedAt:    now,
 		ScheduledFor: now,
 		Queue:        queue,
-		Priority:     0,
+		Priority:     PriorityNormal,
 		MaxRetries:   3,
 		Timeout:      5 * time.Minute,
+		Deadline:     now.Add(5 * time.Minute),
 	}
 }
 
@@ -63,14 +76,15 @@ func (j *Job) WithRetries(maxRetries int) *Job {
 	return j
 }
 
-// WithTimeout sets the job timeout
+// WithTimeout sets the job timeout and deadline
 func (j *Job) WithTimeout(timeout time.Duration) *Job {
 	j.Timeout = timeout
+	j.Deadline = time.Now().Add(timeout)
 	return j
 }
 
 // WithPriority sets the job priority
-func (j *Job) WithPriority(priority int) *Job {
+func (j *Job) WithPriority(priority Priority) *Job {
 	j.Priority = priority
 	return j
 }
@@ -97,4 +111,9 @@ func (j *Job) NextRetryDelay() time.Duration {
 	// Exponential backoff: 2^retryCount * baseDelay
 	baseDelay := time.Second
 	return time.Duration(1<<uint(j.RetryCount)) * baseDelay
-} 
+}
+
+// IsOverdue checks if the job has exceeded its deadline
+func (j *Job) IsOverdue() bool {
+	return !j.Deadline.IsZero() && time.Now().After(j.Deadline)
+}
